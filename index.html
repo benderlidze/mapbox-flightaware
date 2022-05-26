@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Animate a point along a route</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v2.8.2/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v2.8.2/mapbox-gl.js"></script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            font-family: Verdana, Geneva, Tahoma, sans-serif;
+        }
+
+        #map {
+            width: 80%;
+            height: 100%;
+        }
+
+        #sidebar {
+            width: 20%;
+        }
+
+        #main-container {
+            display: flex;
+            height: 100vh
+        }
+
+        fieldset {
+            border-radius: 6px;
+            color: gray;
+            border: 1px solid gray;
+            font-size: 0.7rem;
+            margin: 5px;
+        }
+
+        fieldset>input {
+            border: 0px;
+        }
+
+        fieldset>input:focus {
+            outline: none;
+        }
+
+        .form {
+            margin: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .search-button {
+            background-color: #d4d3d3;
+            width: 100%;
+            text-transform: uppercase;
+            padding: 10px;
+            border: 0px;
+            border-radius: 6px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
+        .search-button:active {
+            background-color: #aaaaaa;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="main-container">
+        <div id="sidebar">
+
+            <button id="getPlanes">get planes by BBOX</button>
+
+            <div class="form">
+                <fieldset>
+                    <legend>From</legend>
+                    <input type="text"><br>
+                </fieldset>
+                <fieldset>
+                    <legend>To</legend>
+                    <input type="text"><br>
+                </fieldset>
+                <button class="search-button">find flight</button>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyZ2JlciIsImEiOiJja3dwOWgzeGQwYWdyMm9xb2pkMDFvYmNuIn0.H9AJ_NLmDNYMed6dvu_Q0A';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v11',
+            center: { lng: 9.37318341810726, lat: 49.46385008750232 },
+            zoom: 4.7
+        });
+
+
+
+        map.on('load', () => {
+
+            map.loadImage('images/xsmall.png', (error, image) => {
+                if (error) throw error;
+                map.addImage('plane', image);
+
+                map.addSource('bboxPlanes', {
+                    'type': 'geojson',
+                    'data': {
+                        "type": "FeatureCollection",
+                        "features": []
+                    }
+                });
+
+                map.addLayer({
+                    'id': 'bboxPlanes',
+                    'source': 'bboxPlanes',
+                    'type': 'symbol',
+                    'layout': {
+                        'icon-image': 'plane',
+                        'icon-size': 0.8,
+                        'icon-rotate': ['get', 'bearing'],
+                        'icon-rotation-alignment': 'map',
+                        'icon-allow-overlap': true,
+                        'icon-ignore-placement': true
+                    }
+                });
+
+                // location of the feature, with description HTML from its properties.
+                map.on('click', 'bboxPlanes', (e) => {
+                    console.log('e', e);
+
+                    const description = e.features[0].properties.ident;
+                    new mapboxgl.Popup()
+                        .setLngLat(e.latLng)
+                        .setHTML(description)
+                        .addTo(map);
+                });
+                map.on('mouseenter', 'bboxPlanes', () => {
+                    map.getCanvas().style.cursor = 'pointer';
+                });
+                map.on('mouseleave', 'bboxPlanes', () => {
+                    map.getCanvas().style.cursor = '';
+                });
+
+            })
+
+        });
+
+        document.getElementById("getPlanes").addEventListener("click", async () => {
+
+            const data = await getPlanes()
+            console.log('data', data);
+            displayPlanesOnMap(data)
+        })
+
+        async function getPlanes() {
+            if (!map) { console.error("no mapbox ref"); return; }
+            const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
+            const bboxQuery = `https://serg.one/flightaware_api.php?bbox=${bbox}`;
+            return fetch(bboxQuery)
+                .then(data => data.json())
+                .then(json => json)
+        }
+
+        function displayPlanesOnMap(data) {
+            if (!data || !map || !data.flights || data.flights.length === 0) return;
+
+            //add planes on the map 
+            const planes = data.flights.map(plane => {
+                const { latitude, longitude, heading } = plane.last_position
+                return {
+                    "type": "Feature",
+                    "properties": {
+                        bearing: heading,
+                        ident: plane.ident
+                    },
+                    "geometry": {
+                        "type": "Point",
+                        "coordinates": [
+                            longitude,
+                            latitude
+                        ]
+                    }
+                }
+            })
+
+            const planesCollection = {
+                "type": "FeatureCollection",
+                "features": planes
+            }
+            map.getSource("bboxPlanes").setData(planesCollection)
+
+        }
+    </script>
+
+</body>
+
+</html>
