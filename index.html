@@ -22,7 +22,7 @@
         }
 
         #sidebar {
-            width: 20%;
+            width: 30%;
         }
 
         #main-container {
@@ -36,6 +36,7 @@
             border: 1px solid gray;
             font-size: 0.7rem;
             margin: 5px;
+            width: 100%;
         }
 
         fieldset>input {
@@ -47,6 +48,7 @@
         }
 
         .form {
+            padding: 10px;
             margin: 10px;
             display: flex;
             flex-direction: column;
@@ -130,6 +132,7 @@
     </div>
 
     <script>
+        const apiDomain = 'https://serg.one'
         const fromTo = {
             from: "",
             to: ""
@@ -146,17 +149,8 @@
         //upload airports data 
         fetch("data/airports.json").then(data => data.json()).then(json => {
             airports.push(...json)
-
-
-            // const formatedAirports = airports.map(port => {
-            //     return {
-            //         name: `${port.name}, ${port.icao}, ${port.code}`,
-            //         icao: port.icao,
-            //         code: port.code
-            //     }
-            // })
-            autocomplete(document.getElementById("airportfrom"), airports, e => { fromTo.from = e });
-            autocomplete(document.getElementById("airportto"), airports, e => { fromTo.to = e });
+            autocomplete(document.getElementById("airportfrom"), airports, e => { fromTo.from = e.icao });
+            autocomplete(document.getElementById("airportto"), airports, e => { fromTo.to = e.icao });
         })
 
         map.on('load', () => {
@@ -211,6 +205,23 @@
         document.getElementById("find-flight").addEventListener("click", async () => {
             console.log('fromTo', fromTo);
 
+            if (fromTo.from === "" || fromTo.to === "" || fromTo.from === fromTo.to) return;
+
+            var data = new FormData();
+            data.append("json", JSON.stringify(fromTo));
+            const bboxQuery = `${apiDomain}/flightaware_api.php`;
+
+            fetch(bboxQuery, {
+                method: "POST",
+                body: data
+            })
+                .then(data => data.json())
+                .then(json => {
+                    console.log('json', json);
+                    if (json && json.flights.length > 0) {
+                        openFlightsMenu()
+                    }
+                })
         })
 
         document.getElementById("getPlanes").addEventListener("click", async () => {
@@ -222,10 +233,14 @@
         async function getPlanes() {
             if (!map) { console.error("no mapbox ref"); return; }
             const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
-            const bboxQuery = `https://serg.one/flightaware_api.php?bbox=${bbox}`;
+            const bboxQuery = `${apiDomain}/flightaware_api.php?bbox=${bbox}`;
             return fetch(bboxQuery)
                 .then(data => data.json())
                 .then(json => json)
+        }
+
+        function openFlightsMenu(){
+            
         }
 
         function displayPlanesOnMap(data) {
