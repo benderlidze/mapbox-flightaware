@@ -395,21 +395,29 @@
 
         function buildFlights() {
 
+            flightsDiv.innerHTML = '';
+
             searchedFlights.map(fl => {
-                return fl.segments.map(seg => {
-                    const data = {
-                        icao: seg.ident_icao,
-                        status: seg.status,
-                        depature: seg.estimated_off,
-                        arrival: seg.estimated_on,
-                        operator: seg.operator,
-                        origin: seg.origin.code_icao,
-                        destination: seg.destination.code_icao,
-                        distance: seg.route_distance
-                    }
-                    createDropDown(data)
-                })
+                return fl.segments
+                    .filter(seg => //filter only direct flights!
+                        seg.origin.code.toLowerCase() === fromTo.from.toLowerCase()
+                        &&
+                        seg.destination.code.toLowerCase() === fromTo.to.toLowerCase()
+                    ).map(seg => {
+                        const data = {
+                            icao: seg.ident_icao,
+                            status: seg.status,
+                            depature: seg.estimated_off,
+                            arrival: seg.estimated_on,
+                            operator: seg.operator,
+                            origin: seg.origin.code_icao,
+                            destination: seg.destination.code_icao,
+                            distance: seg.route_distance
+                        }
+                        createDropDown(data)
+                    })
             })
+
 
             accordionUpdate()
 
