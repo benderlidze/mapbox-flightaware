@@ -47,6 +47,27 @@
             outline: none;
         }
 
+        .distance {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            background-color: #f8f8f9;
+            border-radius: 6px;
+            margin: 10px 0px;
+        }
+
+        .status {
+            display: flex;
+            justify-content: center;
+            padding: 10px;
+            background-color: #fff6f6;
+            border-radius: 6px;
+            color: red;
+            margin-bottom: 10px;
+        }
+
+
+
         .form {
             padding: 10px;
             margin: 10px;
@@ -161,6 +182,7 @@
         .two-columns {
             display: flex;
             justify-content: space-between;
+            border-radius: 6px;
         }
 
         .two-columns>div {
@@ -631,7 +653,7 @@
         async function getPlanes() {
             if (!map) { console.error("no mapbox ref"); return; }
             const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
-            const bboxQuery = `${apiDomain} /flightaware_api.php?bbox=${bbox}`;
+            const bboxQuery = `${apiDomain}/flightaware_api.php?bbox=${bbox}`;
             return fetch(bboxQuery)
                 .then(data => data.json())
                 .then(json => json)
