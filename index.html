@@ -76,6 +76,10 @@
             display: inline-block;
         }
 
+        .autocomplete>input {
+            width: 100%;
+        }
+
         .autocomplete-items {
             position: absolute;
             border: 1px solid #d4d4d4;
@@ -220,20 +224,24 @@
                 font-size: 18px;
             }
         }
+
+        .directions {
+            font-size: 0.7rem;
+        }
+
+        .directions>span {
+            font-size: 1rem;
+        }
     </style>
 </head>
 
 <body>
 
     <div id="main-container">
-
-
-
         <div id="sidebar">
-
             <div id="mySidenav" class="sidenav">
                 <div id="side-bar-nav">
-                    <div class="from">
+                    <div class="directions">
                         From
                         <span id="nav-from"></span>
                     </div>
@@ -245,7 +253,6 @@
                 </div>
                 <div id="flights"></div>
             </div>
-
             <button id="getPlanes">get planes by BBOX</button>
             <div class="form">
                 <fieldset class="autocomplete">
@@ -293,13 +300,120 @@
             autocomplete(document.getElementById("airportto"), airports, e => { fromTo.to = e.icao });
         })
 
-
-
         map.on('load', () => {
 
             map.loadImage('images/xsmall.png', (error, image) => {
                 if (error) throw error;
                 map.addImage('plane', image);
+
+                //================== PLANE ROUTE =================================//
+                // Add a source and layer displaying a point which will be animated in a circle.
+                map.addSource('flight-route-airports', {
+                    'type': 'geojson',
+
+                    'data': {
+                        "type": "FeatureCollection",
+                        "features": []
+                    }
+                });
+
+                map.addSource('flight-route', {
+                    'type': 'geojson',
+                    lineMetrics: true,
+                    'data': {
+                        "type": "FeatureCollection",
+                        "features": []
+                    }
+                });
+
+                map.addSource('flight-plane', {
+                    'type': 'geojson',
+                    'data': {
+                        "type": "FeatureCollection",
+                        "features": []
+                    }
+                });
+
+                map.addSource('dark', {
+                    'type': 'geojson',
+                    'data': {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Polygon',
+                            // These coordinates outline Maine.
+                            'coordinates': [
+                                [
+                                    [-180, -90],
+                                    [-180, 90],
+                                    [180, 90],
+                                    [180, -90],
+                                    [-180, -90]
+                                ],
+                            ]
+                        }
+                    }
+                });
+                map.addLayer({
+                    'id': 'dark',
+                    'type': 'fill',
+                    'source': 'dark', // reference the data source
+                    'layout': {
+                        // Make the layer visible by default.
+                        'visibility': 'none'
+                    },
+                    'paint': {
+                        'fill-color': 'black', // blue color fill
+                        'fill-opacity': 0.5
+                    }
+                });
+
+                map.addLayer({
+                    'id': 'flight-route',
+                    'source': 'flight-route',
+                    'type': 'line',
+                    'paint': {
+                        'line-width': 2,
+                        'line-color': 'orange',
+                        'line-gradient': [
+                            'interpolate',
+                            ['linear'],
+                            ['line-progress'],
+                            0,
+                            'orange',
+                            1,
+                            'yellow'
+                        ]
+                    }
+                });
+
+                map.addLayer({
+                    'id': 'flight-route-airports',
+                    'type': 'circle',
+                    'source': 'flight-route-airports',
+                    'paint': {
+                        "circle-radius": 4,
+                        "circle-opacity": 1,
+                        "circle-color": "white",
+                        "circle-stroke-width": 3,
+                        "circle-stroke-color": "orange",
+                        "circle-stroke-opacity": 1,
+                    }
+                });
+
+                map.addLayer({
+                    'id': 'flight-plane',
+                    'source': 'flight-plane',
+                    'type': 'symbol',
+                    'layout': {
+                        'icon-image': 'airport-15',
+                        'icon-rotate': ['get', 'bearing'],
+                        'icon-rotation-alignment': 'map',
+                        'icon-allow-overlap': true,
+                        'icon-ignore-placement': true
+                    }
+                });
+
+                //================== PLANE ROUTE =================================//
 
                 map.addSource('bboxPlanes', {
                     'type': 'geojson',
@@ -322,6 +436,7 @@
                         'icon-ignore-placement': true
                     }
                 });
+
 
                 // location of the feature, with description HTML from its properties.
                 map.on('click', 'bboxPlanes', (e) => {
@@ -397,6 +512,9 @@
 
             flightsDiv.innerHTML = '';
 
+            const from = findByICAO(fromTo.from)
+            const to = findByICAO(fromTo.to)
+
             searchedFlights.map(fl => {
                 return fl.segments
                     .filter(seg => //filter only direct flights!
@@ -418,11 +536,66 @@
                     })
             })
 
-
             accordionUpdate()
 
-            navFromSpan.innerHTML = fromTo.from
-            navToSpan.innerHTML = fromTo.to
+            navFromSpan.innerHTML = `${from.name} ${from.icao}`
+            navToSpan.innerHTML = `${to.name} ${to.icao}`
+
+            buildMapRoute(
+                [+from.lon, +from.lat],
+                [+to.lon, +to.lat]
+            )
+        }
+
+
+        function buildMapRoute(from, to) {
+
+            console.log('from,to', from, to);
+            const origin = from;
+            const destination = to;
+            const airports = {
+                'type': 'FeatureCollection',
+                'features': [turf.lineString([origin, destination])]
+            };
+            const route = {
+                'type': 'FeatureCollection',
+                'features': [turf.lineString([origin, destination])]
+            };
+            const point = turf.point(origin)
+
+            // Calculate the distance in kilometers between route start/end point.
+            const lineDistance = turf.length(route.features[0]);
+            const arc = [];
+            const steps = 500;
+
+            // Draw an arc between the `origin` & `destination` of the two points
+            for (let i = 0; i < lineDistance; i += lineDistance / steps) {
+                const segment = turf.along(route.features[0], i);
+                arc.push(segment.geometry.coordinates);
+            }
+            arc.push(destination);//add final point 
+
+            // Update the route with calculated arc coordinates
+            route.features[0].geometry.coordinates = arc;
+
+            // Used to increment the value of the point measurement against the route.
+            let counter = 0;
+
+
+            map.setLayoutProperty("dark", 'visibility', 'visible');
+
+            map.getSource("flight-route").setData(route)
+            map.getSource("flight-plane").setData(point)
+            map.getSource("flight-route-airports").setData(airports)
+
+            var bounds = new mapboxgl.LngLatBounds();
+            bounds.extend(origin);
+            bounds.extend(destination);
+            map.fitBounds(bounds, { padding: 50 });
+        }
+
+        function findByICAO(search) {
+            return airports.find(a => a.icao.toLowerCase() === search.toLowerCase())
         }
 
         function createDropDown(data) {
@@ -445,20 +618,20 @@
                         <div class="status">${data.status}</div>
                     </div>
                 </div>
-            `
+                `
 
             flightsDiv.innerHTML += div
         }
 
         function getDateTime(date) {
             const d = new Date(date)
-            return `${d.getHours()}:${d.getMinutes()}`;
+            return `${d.getHours()}:${d.getMinutes()} `;
         }
 
         async function getPlanes() {
             if (!map) { console.error("no mapbox ref"); return; }
             const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
-            const bboxQuery = `${apiDomain}/flightaware_api.php?bbox=${bbox}`;
+            const bboxQuery = `${apiDomain} /flightaware_api.php?bbox=${bbox}`;
             return fetch(bboxQuery)
                 .then(data => data.json())
                 .then(json => json)
