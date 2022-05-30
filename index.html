@@ -254,6 +254,10 @@
         .directions>span {
             font-size: 1rem;
         }
+
+        .day {
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 
@@ -271,7 +275,7 @@
                         To
                         <span id="nav-to"></span>
                     </div>
-                    <button id="searchAgain">Search Again</button>
+                    <button id="searchAgain">&#8592; Search Again</button>
                 </div>
                 <div id="flights"></div>
             </div>
@@ -293,6 +297,7 @@
 
     <script>
 
+
         const apiDomain = 'https://serg.one'
         const fromTo = {
             from: "",
@@ -300,6 +305,9 @@
         }
         const airports = [];
         const searchedFlights = [];
+        const planePositionData = [];
+
+        let flightRoute = {};
 
         const searchAgainButton = document.getElementById("searchAgain");
         const findFlightButton = document.getElementById("find-flight")
@@ -485,6 +493,11 @@
             for (let i = 0; i < acc.length; i++) {
                 acc[i].addEventListener("click", function () {
                     this.classList.toggle("active");
+                    console.log('this', this);
+                    //fetchPlanePosition(planeId)
+                    const planeId = this.id
+                    fetchPlanePosition(planeId)
+
                     var panel = this.nextElementSibling;
                     if (panel.style.maxHeight) {
                         panel.style.maxHeight = null;
@@ -495,6 +508,50 @@
             }
         }
 
+        async function fetchPlanePosition(planeId) {
+
+            const uploaded = planePositionData.filter(plane => plane.planeId === planeId);
+            let data;
+            if (uploaded && uploaded.length > 0) {
+                data = uploaded[0].data
+            } else {
+                const bboxQuery = `${apiDomain}/flightaware_api.php?position=${planeId}`;
+                const resp = await fetch(bboxQuery, { method: "GET", })
+                const json = await resp.json()
+                planePositionData.push({
+                    planeId,
+                    data: json
+                })
+                data = json;
+            }
+            console.log('data', data);
+            updatePlaneMapPosition(data)
+        }
+
+        function updatePlaneMapPosition(data) {
+
+            console.log('data', data);
+            if (data.last_position) {
+                const { latitude, longitude, heading } = data.last_position
+                const point = [longitude, latitude];
+
+                if (flightRoute) {
+                    const pt = turf.point(point);
+                    const snapped = turf.nearestPointOnLine(flightRoute, pt, { units: 'miles' });
+
+                    const plane = {
+                        "type": "Feature",
+                        "properties": {
+                            "bearing": heading
+                        },
+                        "geometry": {
+                            "type": "Point", "coordinates": snapped.geometry.coordinates
+                        }
+                    }
+                    map.getSource('flight-plane').setData(plane)
+                }
+            }
+        }
 
         searchAgainButton.addEventListener("click", async () => {
             closeNav()
@@ -545,6 +602,8 @@
                         seg.destination.code.toLowerCase() === fromTo.to.toLowerCase()
                     ).map(seg => {
                         const data = {
+                            fa_flight_id: seg.fa_flight_id,
+                            inbound_fa_flight_id: seg.inbound_fa_flight_id,
                             icao: seg.ident_icao,
                             status: seg.status,
                             depature: seg.estimated_off,
@@ -579,9 +638,12 @@
                 'type': 'FeatureCollection',
                 'features': [turf.lineString([origin, destination])]
             };
+
+            const flRoute = turf.lineString([origin, destination])
+            flightRoute = flRoute
             const route = {
                 'type': 'FeatureCollection',
-                'features': [turf.lineString([origin, destination])]
+                'features': [flRoute]
             };
             const point = turf.point(origin)
 
@@ -604,8 +666,8 @@
             let counter = 0;
 
 
-            map.setLayoutProperty("dark", 'visibility', 'visible');
 
+            map.setLayoutProperty("dark", 'visibility', 'visible');
             map.getSource("flight-route").setData(route)
             map.getSource("flight-plane").setData(point)
             map.getSource("flight-route-airports").setData(airports)
@@ -622,21 +684,36 @@
 
         function createDropDown(data) {
 
+            // const button = document.createElement("button")
+            // button.className = 'accordion'
+            // button.textContent = `${data.operator} ${data.icao}`
+            // button.addEventListener("click", function () {
+            //     button.classList.toggle("active");
+            //     var panel = this.nextElementSibling;
+            //     if (panel.style.maxHeight) {
+            //         panel.style.maxHeight = null;
+            //     } else {
+            //         panel.style.maxHeight = panel.scrollHeight + "px";
+            //     }
+            // })
+
             const div = `
-                <div class="segment">
-                    <button class="accordion">${data.operator} ${data.icao}</button>
+                <div class="segment" >
+                    <button class="accordion" id="${data.fa_flight_id}">${data.operator} ${data.icao}</button>
                     <div class="panel">
                         <div class="two-columns">
                             <div class="from">
                                 <div class="header">${data.origin}</div>
+                                <div class="day">${getDay(data.depature)}</div>
                                 <div class="dep">${getDateTime(data.depature)}</div>
                             </div>
                             <div class="to">
                                 <div class="header">${data.destination}</div>
+                                <div class="day">${getDay(data.arrival)}</div>
                                 <div class="dep">${getDateTime(data.arrival)}</div>
                             </div>
                         </div>
-                        <div class="distance">${data.distance}</div>
+                        <div class="distance">${data.distance}km</div>
                         <div class="status">${data.status}</div>
                     </div>
                 </div>
@@ -645,9 +722,15 @@
             flightsDiv.innerHTML += div
         }
 
+        function getDay(date) {
+            return new Date(date).toDateString()
+        }
+
         function getDateTime(date) {
             const d = new Date(date)
-            return `${d.getHours()}:${d.getMinutes()} `;
+            const hours = ('0' + d.getHours()).slice(-2)
+            const mins = ('0' + d.getMinutes()).slice(-2)
+            return `${hours}:${mins} `;
         }
 
         async function getPlanes() {
