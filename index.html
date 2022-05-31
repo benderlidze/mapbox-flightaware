@@ -33,10 +33,11 @@
         fieldset {
             border-radius: 6px;
             color: gray;
-            border: 1px solid gray;
+            border: 1px solid #dbe0e4;
             font-size: 0.7rem;
-            margin: 5px;
+            margin: 5px 0px;
             width: 100%;
+            box-sizing: border-box;
         }
 
         fieldset>input {
@@ -66,14 +67,15 @@
             margin-bottom: 10px;
         }
 
-
-
         .form {
             padding: 10px;
-            margin: 10px;
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: flex-start;
+        }
+
+        .form>div {
+            width: 100%;
         }
 
         .search-button {
@@ -176,7 +178,7 @@
         /* =========CARDS============ */
         .segment {
             box-sizing: border-box;
-            border-bottom: 1px solid #cfcfcf;
+            border-bottom: 1px solid #a3c3e1;
         }
 
         .two-columns {
@@ -268,6 +270,37 @@
         .day {
             font-size: 0.8rem;
         }
+
+        .switch-button {
+            border: 1px solid #a3c3e1;
+            background-color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .flight {
+            background-image: url(images/route_icon.svg);
+            background-repeat: no-repeat;
+            background-size: 25px;
+            background-position: center;
+        }
+
+        .plane {
+            background-image: url(images/plane.svg);
+            background-repeat: no-repeat;
+            background-size: 25px;
+            background-position: center;
+        }
+
+        .active-button {
+            background-color: #acd4fb;
+        }
+
+        #search-plane {
+            display: none;
+        }
     </style>
 </head>
 
@@ -275,6 +308,7 @@
 
     <div id="main-container">
         <div id="sidebar">
+            
             <div id="mySidenav" class="sidenav">
                 <div id="side-bar-nav">
                     <div class="directions">
@@ -289,17 +323,42 @@
                 </div>
                 <div id="flights"></div>
             </div>
+
+            <div id="flightSidenav" class="sidenav">
+                <div id="side-bar-nav">
+                    <div class="directions">
+                        Flight number
+                        <span id="nav-from"></span>
+                    </div>
+                    <button id="searchFlightAgain">&#8592; Search Again</button>
+                </div>
+                <div id="flights"></div>
+            </div>
+
             <button id="getPlanes">get planes by BBOX</button>
             <div class="form">
-                <fieldset class="autocomplete">
-                    <legend>From</legend>
-                    <input id="airportfrom" type="text"><br>
-                </fieldset>
-                <fieldset class="autocomplete">
-                    <legend>To</legend>
-                    <input id="airportto" type="text"><br>
-                </fieldset>
-                <button id="find-flight" class="search-button">find flight</button>
+                <div>
+                    <button class="switch-button flight active-button" id="flightSearch"></button>
+                    <button class="switch-button plane" id="planeSearch"></button>
+                </div>
+                <div id="search-route">
+                    <fieldset class="autocomplete">
+                        <legend>From</legend>
+                        <input id="airportfrom" type="text"><br>
+                    </fieldset>
+                    <fieldset class="autocomplete">
+                        <legend>To</legend>
+                        <input id="airportto" type="text"><br>
+                    </fieldset>
+                    <button id="find-flight" class="search-button">find flight</button>
+                </div>
+                <div id="search-plane">
+                    <fieldset class="autocomplete">
+                        <legend>Flight number</legend>
+                        <input id="flight-number" type="text"><br>
+                    </fieldset>
+                    <button id="find-flight-number" class="search-button">find flight</button>
+                </div>
             </div>
         </div>
         <div id="map"></div>
@@ -319,11 +378,18 @@
 
         let flightRoute = {};
 
+        const flightSearch = document.getElementById("flightSearch");
+        const planeSearch = document.getElementById("planeSearch");
+        const searchRouteDiv = document.getElementById("search-route");
+        const searchPlaneDiv = document.getElementById("search-plane");
+
         const searchAgainButton = document.getElementById("searchAgain");
         const findFlightButton = document.getElementById("find-flight")
+        const findByFlightNumberButton = document.getElementById("find-flight-number")
         const flightsDiv = document.getElementById("flights")
         const navFromSpan = document.getElementById("nav-from")
         const navToSpan = document.getElementById("nav-to")
+        const flightNumber = document.getElementById("flight-number")
 
         mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyZ2JlciIsImEiOiJja3dwOWgzeGQwYWdyMm9xb2pkMDFvYmNuIn0.H9AJ_NLmDNYMed6dvu_Q0A';
         const map = new mapboxgl.Map({
@@ -563,10 +629,43 @@
             }
         }
 
-        searchAgainButton.addEventListener("click", async () => {
+        flightSearch.addEventListener("click", () => {
+            searchRouteDiv.style.display = "inline"
+            searchPlaneDiv.style.display = "none"
+            planeSearch.classList.toggle("active-button")
+            flightSearch.classList.toggle("active-button")
+        })
+        planeSearch.addEventListener("click", () => {
+            searchRouteDiv.style.display = "none"
+            searchPlaneDiv.style.display = "inline"
+            planeSearch.classList.toggle("active-button")
+            flightSearch.classList.toggle("active-button")
+        })
+
+        searchAgainButton.addEventListener("click", () => {
             closeNav()
         })
 
+
+        findByFlightNumberButton.addEventListener("click", async () => {
+
+            if (flightNumber.value === "") return;
+            const flightNum = flightNumber.value
+            console.log('flightNum', flightNum);
+
+
+            const bboxQuery = `${apiDomain}/flightaware_api.php?planeInfo=${flightNum.toUpperCase()}`;
+            const resp = await fetch(bboxQuery, { method: "GET", })
+            const json = await resp.json()
+            console.log('json', json);
+
+            if (json && json.flights.length > 0) {
+                searchedFlights.length = 0;
+                searchedFlights.push(...json.flights)
+                openFlightSidenav()
+                //buildFlights()
+            }
+        })
 
         findFlightButton.addEventListener("click", async () => {
 
@@ -763,6 +862,10 @@
         function openFlightsMenu() {
             const width = document.getElementById("sidebar").offsetWidth;
             openNav(`${width}px`);
+        }
+        function openFlightSidenav() {
+            const width = document.getElementById("sidebar").offsetWidth;
+            document.getElementById("flightSidenav").style.width = `${width}px`;
         }
 
         function displayPlanesOnMap(data) {
