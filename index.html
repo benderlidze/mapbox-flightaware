@@ -308,23 +308,10 @@
 
     <div id="main-container">
         <div id="sidebar">
-            
-            <div id="mySidenav" class="sidenav">
-                <div id="side-bar-nav">
-                    <div class="directions">
-                        From
-                        <span id="nav-from"></span>
-                    </div>
-                    <div class="directions">
-                        To
-                        <span id="nav-to"></span>
-                    </div>
-                    <button id="searchAgain">&#8592; Search Again</button>
-                </div>
-                <div id="flights"></div>
-            </div>
 
-            <div id="flightSidenav" class="sidenav">
+            <div id="sideNav" class="sidenav"></div>
+
+            <!-- <div id="flightSidenav" class="sidenav">
                 <div id="side-bar-nav">
                     <div class="directions">
                         Flight number
@@ -333,7 +320,7 @@
                     <button id="searchFlightAgain">&#8592; Search Again</button>
                 </div>
                 <div id="flights"></div>
-            </div>
+            </div> -->
 
             <button id="getPlanes">get planes by BBOX</button>
             <div class="form">
@@ -355,7 +342,7 @@
                 <div id="search-plane">
                     <fieldset class="autocomplete">
                         <legend>Flight number</legend>
-                        <input id="flight-number" type="text"><br>
+                        <input id="flight-number" type="text" style="text-transform: uppercase;"><br>
                     </fieldset>
                     <button id="find-flight-number" class="search-button">find flight</button>
                 </div>
@@ -374,10 +361,12 @@
         }
         const airports = [];
         const searchedFlights = [];
+        const searchedFlightInfo = [];
         const planePositionData = [];
 
         let flightRoute = {};
 
+        const sideNav = document.getElementById("sideNav");
         const flightSearch = document.getElementById("flightSearch");
         const planeSearch = document.getElementById("planeSearch");
         const searchRouteDiv = document.getElementById("search-route");
@@ -386,7 +375,7 @@
         const searchAgainButton = document.getElementById("searchAgain");
         const findFlightButton = document.getElementById("find-flight")
         const findByFlightNumberButton = document.getElementById("find-flight-number")
-        const flightsDiv = document.getElementById("flights")
+        // const flightsDiv = document.getElementById("flights")
         const navFromSpan = document.getElementById("nav-from")
         const navToSpan = document.getElementById("nav-to")
         const flightNumber = document.getElementById("flight-number")
@@ -642,30 +631,71 @@
             flightSearch.classList.toggle("active-button")
         })
 
-        searchAgainButton.addEventListener("click", () => {
-            closeNav()
+        document.addEventListener("click", event => {
+            if (event.target.id === 'searchAgain') {
+                closeNav()
+            }
         })
 
 
         findByFlightNumberButton.addEventListener("click", async () => {
 
             if (flightNumber.value === "") return;
-            const flightNum = flightNumber.value
+            const flightNum = flightNumber.value.toUpperCase()
             console.log('flightNum', flightNum);
 
 
-            const bboxQuery = `${apiDomain}/flightaware_api.php?planeInfo=${flightNum.toUpperCase()}`;
+            const bboxQuery = `${apiDomain}/flightaware_api.php?planeInfo=${flightNum}`;
             const resp = await fetch(bboxQuery, { method: "GET", })
             const json = await resp.json()
             console.log('json', json);
 
             if (json && json.flights.length > 0) {
-                searchedFlights.length = 0;
-                searchedFlights.push(...json.flights)
-                openFlightSidenav()
-                //buildFlights()
+                searchedFlightInfo.length = 0;
+                searchedFlightInfo.push(...json.flights)
+                openSideBar()
+                buildFlightInfo(flightNum)
             }
         })
+
+        function buildFlightInfo(flightNum) {
+
+            sideNav.innerHTML = '';
+            const dropDowns = searchedFlightInfo.map(seg => {
+                const data = {
+                    fa_flight_id: seg.fa_flight_id,
+                    inbound_fa_flight_id: seg.inbound_fa_flight_id,
+                    icao: seg.ident_icao,
+                    status: seg.status,
+                    depature: seg.estimated_off,
+                    arrival: seg.estimated_on,
+                    operator: seg.operator,
+                    origin: seg.origin.code_icao,
+                    destination: seg.destination.code_icao,
+                    distance: seg.route_distance
+                }
+                return createDropDown(data)
+            }).join(" ")
+
+            // buildMapRoute(
+            //     [+from.lon, +from.lat],
+            //     [+to.lon, +to.lat]
+            // )
+
+            const content = `
+                <div id="side-bar-nav">
+                    <div class="directions">
+                        Flight Number
+                        <span id="nav-from">${flightNum}</span>
+                    </div>
+                    <button id="searchAgain">&#8592; Search Again</button>
+                </div>
+                <div id="flights">${dropDowns}</div>
+            `
+            sideNav.innerHTML = content
+            accordionUpdate()
+        }
+
 
         findFlightButton.addEventListener("click", async () => {
 
@@ -684,7 +714,7 @@
                     if (json && json.flights.length > 0) {
                         searchedFlights.length = 0;
                         searchedFlights.push(...json.flights)
-                        openFlightsMenu()
+                        openSideBar()
                         buildFlights()
                     }
                 })
@@ -692,18 +722,18 @@
 
         document.getElementById("getPlanes").addEventListener("click", async () => {
             const data = await getPlanes()
-            console.log('data', data);
             displayPlanesOnMap(data)
         })
 
+
         function buildFlights() {
 
-            flightsDiv.innerHTML = '';
-
+            // flightsDiv.innerHTML = '';
+            sideNav.innerHTML = '';
             const from = findByICAO(fromTo.from)
             const to = findByICAO(fromTo.to)
 
-            searchedFlights.map(fl => {
+            const dropDowns = searchedFlights.map(fl => {
                 return fl.segments
                     .filter(seg => //filter only direct flights!
                         seg.origin.code.toLowerCase() === fromTo.from.toLowerCase()
@@ -722,19 +752,31 @@
                             destination: seg.destination.code_icao,
                             distance: seg.route_distance
                         }
-                        createDropDown(data)
+                        return createDropDown(data)
                     })
-            })
-
-            accordionUpdate()
-
-            navFromSpan.innerHTML = `${from.name} ${from.icao}`
-            navToSpan.innerHTML = `${to.name} ${to.icao}`
+            }).join(" ")
 
             buildMapRoute(
                 [+from.lon, +from.lat],
                 [+to.lon, +to.lat]
             )
+
+            const content = `
+                <div id="side-bar-nav">
+                    <div class="directions">
+                        From
+                        <span id="nav-from">${from.name} ${from.icao}</span>
+                    </div>
+                    <div class="directions">
+                            To
+                            <span id="nav-to">${to.name} ${to.icao}</span>
+                    </div>
+                    <button id="searchAgain">&#8592; Search Again</button>
+                </div>
+                <div id="flights">${dropDowns}</div>
+            `
+            sideNav.innerHTML = content
+            accordionUpdate()
         }
 
 
@@ -807,7 +849,7 @@
             // })
 
             const div = `
-                <div class="segment" >
+                <div class="segment">
                     <div class="accordion" id="${data.fa_flight_id}">
                         <div>
                             ${data.operator} 
@@ -835,8 +877,7 @@
                     </div>
                 </div>
                 `
-
-            flightsDiv.innerHTML += div
+            return div
         }
 
         function getDay(date) {
@@ -859,13 +900,9 @@
                 .then(json => json)
         }
 
-        function openFlightsMenu() {
+        function openSideBar() {
             const width = document.getElementById("sidebar").offsetWidth;
             openNav(`${width}px`);
-        }
-        function openFlightSidenav() {
-            const width = document.getElementById("sidebar").offsetWidth;
-            document.getElementById("flightSidenav").style.width = `${width}px`;
         }
 
         function displayPlanesOnMap(data) {
@@ -1009,11 +1046,11 @@
         }
 
         function openNav(width) {
-            document.getElementById("mySidenav").style.width = width;
+            sideNav.style.width = width;
         }
 
         function closeNav() {
-            document.getElementById("mySidenav").style.width = "0";
+            sideNav.style.width = "0";
         }
     </script>
 
