@@ -353,7 +353,6 @@
 
     <script>
 
-
         const apiDomain = 'https://serg.one'
         const fromTo = {
             from: "",
@@ -549,6 +548,11 @@
                 map.on('mouseleave', 'bboxPlanes', () => {
                     map.getCanvas().style.cursor = '';
                 });
+
+                map.on("moveend", () => {
+                    console.log('map.getBbox()', map.getBounds().toArray());
+                    drawPlanes()
+                })
             })
         });
 
@@ -721,9 +725,13 @@
         })
 
         document.getElementById("getPlanes").addEventListener("click", async () => {
+            drawPlanes()
+        })
+
+        async function drawPlanes() {
             const data = await getPlanes()
             displayPlanesOnMap(data)
-        })
+        }
 
 
         function buildFlights() {
@@ -893,8 +901,15 @@
 
         async function getPlanes() {
             if (!map) { console.error("no mapbox ref"); return; }
-            const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
-            const bboxQuery = `${apiDomain}/flightaware_api.php?bbox=${bbox}`;
+            // const bbox = map.getBounds().toArray().map(coord => coord.reverse().join(" ")).join(" ");
+            // const bboxQuery = `${apiDomain}/flightaware_api.php?bbox=${bbox}`;
+            // return fetch(bboxQuery)
+            //     .then(data => data.json())
+            //     .then(json => json)
+
+
+            const bbox = map.getBounds().toArray()
+            const bboxQuery = `https://opensky-network.org/api/states/all?lamin=${bbox[0][1]}&lomin=${bbox[0][0]}&lamax=${bbox[1][1]}&lomax=${bbox[1][0]}`
             return fetch(bboxQuery)
                 .then(data => data.json())
                 .then(json => json)
@@ -906,16 +921,37 @@
         }
 
         function displayPlanesOnMap(data) {
-            if (!data || !map || !data.flights || data.flights.length === 0) return;
 
+            // if (!data || !map || !data.flights || data.flights.length === 0) return;
             //add planes on the map 
-            const planes = data.flights.map(plane => {
-                const { latitude, longitude, heading } = plane.last_position
+            // const planes = data.flights.map(plane => {
+            //     const { latitude, longitude, heading } = plane.last_position
+            //     return {
+            //         "type": "Feature",
+            //         "properties": {
+            //             bearing: heading,
+            //             ident: plane.ident
+            //         },
+            //         "geometry": {
+            //             "type": "Point",
+            //             "coordinates": [
+            //                 longitude,
+            //                 latitude
+            //             ]
+            //         }
+            //     }
+            // })
+
+            const planes = data.states.map(plane => {
+                const latitude = plane[6]
+                const longitude = plane[5]
+                const heading = plane[10]
+                const icao24 = plane[1]
                 return {
                     "type": "Feature",
                     "properties": {
                         bearing: heading,
-                        ident: plane.ident
+                        ident: icao24
                     },
                     "geometry": {
                         "type": "Point",
