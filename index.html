@@ -209,6 +209,16 @@
             font-size: 15px;
             transition: 0.4s;
             background-color: white;
+
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+        }
+
+        .accordion>.date {
+            font-size: 0.8rem;
         }
 
         .active,
@@ -699,7 +709,15 @@
 
             const div = `
                 <div class="segment" >
-                    <button class="accordion" id="${data.fa_flight_id}">${data.operator} ${data.icao}</button>
+                    <div class="accordion" id="${data.fa_flight_id}">
+                        <div>
+                            ${data.operator} 
+                            ${data.icao} 
+                        </div>
+                        <div class="date">
+                           ${getDay(data.depature)}
+                        </div>
+                    </div>
                     <div class="panel">
                         <div class="two-columns">
                             <div class="from">
