@@ -322,7 +322,7 @@
                 <div id="flights"></div>
             </div> -->
 
-            <button id="getPlanes">get planes by BBOX</button>
+            <!-- <button id="getPlanes">get planes by BBOX</button> -->
             <div class="form">
                 <div>
                     <button class="switch-button flight active-button" id="flightSearch"></button>
@@ -724,10 +724,11 @@
                 })
         })
 
-        document.getElementById("getPlanes").addEventListener("click", async () => {
-            drawPlanes()
-        })
+        // document.getElementById("getPlanes").addEventListener("click", async () => {
+        //     drawPlanes()
+        // })
 
+        drawPlanes()
         async function drawPlanes() {
             const data = await getPlanes()
             displayPlanesOnMap(data)
