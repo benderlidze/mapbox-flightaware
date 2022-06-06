@@ -301,16 +301,68 @@
         #search-plane {
             display: none;
         }
+
+        #progress-bar {
+            background-color: rgba(0, 0, 0, 0.5);
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            display: none;
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        #bar {
+            border-radius: 6px;
+            width: 90%;
+            height: 20px;
+            background-color: #aaaaaa;
+        }
+
+        #progress {
+            border-radius: 6px;
+            width: 10%;
+            height: 20px;
+            background-color: #3ec8ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: small;
+            transition: 1s;
+        }
+
+        .wait {
+            margin: 20px;
+            font-size: 2rem;
+            color: white;
+        }
+
+        .logo {
+            display: flex;
+            margin: 30px 0px;
+            justify-content: center;
+            align-items: center;
+        }
     </style>
 </head>
 
 <body>
 
+    <div id="progress-bar">
+        <div id="bar">
+            <div id="progress">10%</div>
+        </div>
+        <div class="wait"> Please wait...</div>
+    </div>
+
     <div id="main-container">
         <div id="sidebar">
-
+            <div class="logo">
+                <img src="images/newlogo.png" alt="" srcset="">
+            </div>
             <div id="sideNav" class="sidenav"></div>
-
             <!-- <div id="flightSidenav" class="sidenav">
                 <div id="side-bar-nav">
                     <div class="directions">
@@ -321,7 +373,6 @@
                 </div>
                 <div id="flights"></div>
             </div> -->
-
             <!-- <button id="getPlanes">get planes by BBOX</button> -->
             <div class="form">
                 <div>
@@ -370,6 +421,9 @@
         const planeSearch = document.getElementById("planeSearch");
         const searchRouteDiv = document.getElementById("search-route");
         const searchPlaneDiv = document.getElementById("search-plane");
+
+        const progressBar = document.getElementById("progress-bar");
+        const progress = document.getElementById("progress");
 
         const searchAgainButton = document.getElementById("searchAgain");
         const findFlightButton = document.getElementById("find-flight")
@@ -465,6 +519,10 @@
                     'id': 'flight-route',
                     'source': 'flight-route',
                     'type': 'line',
+                    'layout': {
+                        // Make the layer visible by default.
+                        'visibility': 'none'
+                    },
                     'paint': {
                         'line-width': 2,
                         'line-color': 'orange',
@@ -522,6 +580,7 @@
                     'source': 'bboxPlanes',
                     'type': 'symbol',
                     'layout': {
+                        'visibility': 'visible',
                         'icon-image': 'plane',
                         'icon-size': 0.8,
                         'icon-rotate': ['get', 'bearing'],
@@ -550,12 +609,55 @@
                 });
 
                 map.on("moveend", () => {
-                    console.log('map.getBbox()', map.getBounds().toArray());
+                    //console.log('map.getBbox()', map.getBounds().toArray());
                     drawPlanes()
                 })
+
+                drawPlanes()
             })
         });
 
+        function hideShowBBOXPlanes(visible) {
+            const visibility = visible === 'hide' ? 'none' : 'visible'
+            map.setLayoutProperty(
+                "bboxPlanes",
+                'visibility',
+                visibility
+            );
+        }
+
+        function hideShowPlaneRoute(visible) {
+            const visibility = visible === 'hide' ? 'none' : 'visible'
+            map.setLayoutProperty(
+                "flight-route",
+                'visibility',
+                visibility
+            );
+            map.setLayoutProperty(
+                "dark",
+                'visibility',
+                visibility
+            );
+        }
+
+        function showProgressBar(done) {
+            if (done) {
+                progressBar.style.display = 'none';
+                progress.style.width = `10%`
+                return
+            }
+            progressBar.style.display = 'flex';
+            progress.style.width = `10%`
+            let width = 10
+            const interval = setInterval(() => {
+                width = width + 10
+                progress.style.width = `${width}%`
+                progress.innerHTML = `${width}%`
+                if (width >= 100) {
+                    clearInterval(interval)
+                }
+            }, 300)
+        }
 
         function accordionUpdate() {
             const acc = document.getElementsByClassName("accordion");
@@ -593,7 +695,23 @@
                 })
                 data = json;
             }
-            console.log('data', data);
+            console.log('data!!!!!', data);
+
+            if (data && data.origin?.code_icao) {
+
+                const from = findByICAO(data.origin.code)
+                const to = findByICAO(data.destination.code) //for some reason code_icao is same for destination and origin
+
+                console.log('from,to', from, to);
+                buildMapRoute(
+                    [+from.lon, +from.lat],
+                    [+to.lon, +to.lat]
+                )
+
+                hideShowBBOXPlanes('hide')
+                hideShowPlaneRoute('show')
+            }
+
             updatePlaneMapPosition(data)
         }
 
@@ -638,12 +756,15 @@
         document.addEventListener("click", event => {
             if (event.target.id === 'searchAgain') {
                 closeNav()
+                hideShowBBOXPlanes('show')
+                hideShowPlaneRoute('hide')
             }
         })
 
 
         findByFlightNumberButton.addEventListener("click", async () => {
 
+            showProgressBar()
             if (flightNumber.value === "") return;
             const flightNum = flightNumber.value.toUpperCase()
             console.log('flightNum', flightNum);
@@ -660,12 +781,14 @@
                 openSideBar()
                 buildFlightInfo(flightNum)
             }
+            showProgressBar(true)
         })
 
         function buildFlightInfo(flightNum) {
 
             sideNav.innerHTML = '';
             const dropDowns = searchedFlightInfo.map(seg => {
+
                 const data = {
                     fa_flight_id: seg.fa_flight_id,
                     inbound_fa_flight_id: seg.inbound_fa_flight_id,
@@ -675,7 +798,7 @@
                     arrival: seg.estimated_on,
                     operator: seg.operator,
                     origin: seg.origin.code_icao,
-                    destination: seg.destination.code_icao,
+                    destination: seg.destination?.code_icao || "",
                     distance: seg.route_distance
                 }
                 return createDropDown(data)
@@ -704,6 +827,9 @@
         findFlightButton.addEventListener("click", async () => {
 
             if (fromTo.from === "" || fromTo.to === "" || fromTo.from === fromTo.to) return;
+
+            showProgressBar()
+
             var data = new FormData();
             data.append("json", JSON.stringify(fromTo));
             const bboxQuery = `${apiDomain}/flightaware_api.php`;
@@ -721,6 +847,9 @@
                         openSideBar()
                         buildFlights()
                     }
+                    showProgressBar(true)
+                    hideShowBBOXPlanes('hide')
+                    hideShowPlaneRoute('show')
                 })
         })
 
@@ -728,7 +857,6 @@
         //     drawPlanes()
         // })
 
-        drawPlanes()
         async function drawPlanes() {
             const data = await getPlanes()
             displayPlanesOnMap(data)
@@ -841,6 +969,9 @@
         function findByICAO(search) {
             return airports.find(a => a.icao.toLowerCase() === search.toLowerCase())
         }
+        function findByCODE(search) {
+            return airports.find(a => a.code.toLowerCase() === search.toLowerCase())
+        }
 
         function createDropDown(data) {
 
@@ -942,7 +1073,7 @@
             //         }
             //     }
             // })
-
+            if (!data || !data.states) return;
             const planes = data.states.map(plane => {
                 const latitude = plane[6]
                 const longitude = plane[5]
